@@ -17,7 +17,6 @@ metadata:
   name: nginx-deployment
   labels:
     app: nginx
-    owner: chaos
 spec:
   replicas: 3
   selector:
