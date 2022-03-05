@@ -1,0 +1,57 @@
+build:
+  availableSecrets:
+    secretManager:
+    - env: GHKEY
+      versionName: projects/jscheng-cloudrun/secrets/gh-access/versions/1
+  steps:
+  - args:
+    - -c
+    - "cd /workspace/\ngit fetch origin $_BASE_BRANCH\ngit remote add source $_HEAD_REPO_URL\n\
+      git fetch source $_HEAD_BRANCH\n(\necho TARGETHEAD=origin/$_BASE_BRANCH\necho\
+      \ SOURCEHEAD=source/$_HEAD_BRANCH\necho _MR_ID=$_PR_NUMBER) > /workspace/vars.sh\n"
+    entrypoint: bash
+    name: gcr.io/cloud-builders/git
+  - args:
+    - -c
+    - "cd /workspace/\ngit checkout $_HEAD_BRANCH\ncd /workspace/ci-app/app-repo\n\
+      mkdir hydrated-manifests && kubectl kustomize config/prod > hydrated-manifests/prod.yaml\n\
+      cp -r /workspace/ci-app/acm-repo/cluster hydrated-manifests/constraints\n"
+    entrypoint: /bin/sh
+    id: Prepare config
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  - args:
+    - -c
+    - cd /workspace/ci-app/app-repo &&kpt fn source hydrated-manifests/ > kpt-manifests.yaml
+    entrypoint: /bin/sh
+    id: Download policies
+    name: gcr.io/kpt-dev/kpt
+  - args:
+    - -c
+    - "validate --input /workspace/ci-app/app-repo/kpt-manifests.yaml  > /tmp/summary.txt\n\
+      RES=$$?\nsed -n '/^results/,$ p' /tmp/summary.txt > /tmp/s.txt\necho $$GHKEY\
+      \ | gh auth login --with-token\ngh pr comment $_PR_NUMBER -F /tmp/s.txt\nexit\
+      \ $$RES\n"
+    entrypoint: /bin/sh
+    id: Validate against policies
+    name: gcr.io/config-management-release/policy-controller-validate
+    secretEnv:
+    - GHKEY
+  - args:
+    - -c
+    - "echo $$GHKEY | gh auth login --with-token\nbash -x /usr/local/bin/run.sh /workspace/vars.sh\
+      \ gitops/policies data.gitops.only_image_change.violations[_]\n"
+    entrypoint: bash
+    env:
+    - PREFIXES=ci-app/app-repo/
+    name: gcr.io/jscheng-cloudrun/git-opa-eval:20220228
+    secretEnv:
+    - GHKEY
+createTime: '2022-02-28T04:37:35.048814895Z'
+github:
+  name: anthos-config-management-samples
+  owner: ChaosEternal
+  pullRequest:
+    branch: ^main$
+    commentControl: COMMENTS_ENABLED_FOR_EXTERNAL_CONTRIBUTORS_ONLY
+id: 83a05f88-4ff3-4f43-950c-fb68c88641e0
+name: gh

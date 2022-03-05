@@ -1,0 +1,40 @@
+#!/bin/bash
+# $0 -d rule.rego -q query path old-file old-hex old-mode new-file new-hex new-mode
+while getopts d:q: args
+do
+  case "$args" in
+    d)
+      DATAREGO="$OPTARG"
+      ;;
+    q)
+      QUERY="$OPTARG"
+      ;;
+  esac
+done
+shift $((OPTIND - 1 ))
+
+FPATH="$1"
+OLDFILE="$2"
+OLDHEX="$3"
+OLDMOD="$4"
+NEWFILE="$5"
+NEWHEX="$6"
+NEWMOD="$7"
+
+
+TMPDIR=$(mktemp -d /tmp/GITOPA_XXXXXXX)
+trap "rm -fr \"$TMPDIR\"" EXIT
+mkdir -p "$TMPDIR"/input/{newfile,oldfile}
+
+cat <<EOF > "$TMPDIR"/input/diffinfo.yaml
+path: "$FPATH"
+oldhex: "$OLDHEX"
+oldmod: "$OLDMOD"
+oldhex: "$NEWHEX"
+oldmod: "$NEWMOD"
+EOF
+
+cp "$OLDFILE" "$TMPDIR"/input/oldfile/"$(basename "$FPATH")"
+cp "$NEWFILE" "$TMPDIR"/input/newfile/"$(basename "$FPATH")"
+
+opa eval -f values --fail-defined -d "$TMPDIR" -d "$DATAREGO" "$QUERY"
